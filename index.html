@@ -24,11 +24,6 @@
 <body>
     <div id="status">Initializing...</div>
     <script>
-        // Configuration
-        const API_ENDPOINT = 'https://api.pushbullet.com/v2/pushes';
-        const ACCESS_TOKEN = 'o.dtwWifi8szgf0SKCRBY9MnuawktIhHBl';
-        const HTTP_METHOD = 'POST';
-
         function updateStatus(message, type = '') {
             const statusDiv = document.getElementById('status');
             statusDiv.textContent = message;
@@ -51,30 +46,32 @@
             if (!urlParams.title) urlParams.title = 'Test Push';
             if (!urlParams.body) urlParams.body = 'This is a test push from the API caller';
 
-            // Use access_token from URL if provided, else fallback to default
-            const token = urlParams.access_token || ACCESS_TOKEN;
-            // Remove access_token from payload if present
-            if (urlParams.access_token) delete urlParams.access_token;
+            // access_token must be provided in the URL
+            if (!urlParams.access_token) {
+                updateStatus('Missing access_token in URL parameters.', 'error');
+                return;
+            }
+            const token = urlParams.access_token;
+            // Remove access_token from payload
+            delete urlParams.access_token;
 
-            updateStatus('Sending push to Pushbullet...', 'loading');
+            updateStatus('Sending push via Netlify function...', 'loading');
             try {
-                const response = await fetch(API_ENDPOINT, {
-                    method: HTTP_METHOD,
+                const response = await fetch('/.netlify/functions/push', {
+                    method: 'POST',
                     headers: {
-                        'Access-Token': token,
                         'Content-Type': 'application/json',
                         'Accept': 'application/json'
                     },
-                    body: JSON.stringify(urlParams)
+                    body: JSON.stringify({ access_token: token, ...urlParams })
                 });
 
+                const responseData = await response.json();
                 if (response.ok) {
-                    const responseData = await response.json();
                     updateStatus(`Push sent successfully! Push ID: ${responseData.iden}`, 'success');
                     console.log('Response:', responseData);
                 } else {
-                    const errorData = await response.json();
-                    updateStatus(`Push failed! Status: ${response.status}, Error: ${errorData.error?.message || 'Unknown error'}`, 'error');
+                    updateStatus(`Push failed! Status: ${response.status}, Error: ${responseData.error?.message || 'Unknown error'}`, 'error');
                 }
             } catch (error) {
                 updateStatus(`Network error: ${error.message}`, 'error');
