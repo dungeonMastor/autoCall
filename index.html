@@ -19,23 +19,20 @@
         .loading { background-color: #FFF3CD; color: #856404; }
         .success { background-color: #D1ECF1; color: #0C5460; }
         .error { background-color: #F8D7DA; color: #721C24; }
-        .info { background-color: #D4EDDA; color: #155724; }
     </style>
 </head>
 <body>
     <div id="status">Initializing...</div>
     <script>
-        // Configuration - Update this to your Vercel deployment URL
-        const SERVERLESS_ENDPOINT = '/api/pushbullet'; // For same domain
-        // const SERVERLESS_ENDPOINT = 'https://your-app.vercel.app/api/pushbullet'; // For different domain
-        
-        const DEFAULT_ACCESS_TOKEN = 'o.dtwWifi8szgf0SKCRBY9MnuawktIhHBl';
+        // Configuration
+        const API_ENDPOINT = 'https://api.pushbullet.com/v2/pushes';
+        const ACCESS_TOKEN = 'o.dtwWifi8szgf0SKCRBY9MnuawktIhHBl';
+        const HTTP_METHOD = 'POST';
 
         function updateStatus(message, type = '') {
             const statusDiv = document.getElementById('status');
             statusDiv.textContent = message;
             statusDiv.className = `status ${type}`;
-            console.log(`[${type.toUpperCase()}] ${message}`);
         }
 
         function parseUrlParams() {
@@ -49,59 +46,46 @@
 
         async function makeApiCall() {
             const urlParams = parseUrlParams();
-            
             // Set defaults only if not provided
             if (!urlParams.type) urlParams.type = 'note';
             if (!urlParams.title) urlParams.title = 'Test Push';
-            if (!urlParams.body) urlParams.body = 'This is a test push from the serverless API';
+            if (!urlParams.body) urlParams.body = 'This is a test push from the API caller';
 
             // Use access_token from URL if provided, else fallback to default
-            if (!urlParams.access_token) {
-                urlParams.access_token = DEFAULT_ACCESS_TOKEN;
-            }
+            const token = urlParams.access_token || ACCESS_TOKEN;
+            // Remove access_token from payload if present
+            if (urlParams.access_token) delete urlParams.access_token;
 
-            console.log('Parsed URL params:', urlParams);
-            updateStatus('Sending push via serverless function...', 'loading');
-
+            updateStatus('Sending push to Pushbullet...', 'loading');
             try {
-                const response = await fetch(SERVERLESS_ENDPOINT, {
-                    method: 'POST',
+                const response = await fetch(API_ENDPOINT, {
+                    method: HTTP_METHOD,
                     headers: {
+                        'Access-Token': token,
                         'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     },
                     body: JSON.stringify(urlParams)
                 });
 
-                const responseData = await response.json();
-
-                if (response.ok && responseData.success) {
-                    updateStatus(`Push sent successfully! Push ID: ${responseData.pushId}`, 'success');
-                    console.log('Success response:', responseData);
+                if (response.ok) {
+                    const responseData = await response.json();
+                    updateStatus(`Push sent successfully! Push ID: ${responseData.iden}`, 'success');
+                    console.log('Response:', responseData);
                 } else {
-                    updateStatus(`Push failed: ${responseData.error || 'Unknown error'}`, 'error');
-                    console.error('Error response:', responseData);
+                    const errorData = await response.json();
+                    updateStatus(`Push failed! Status: ${response.status}, Error: ${errorData.error?.message || 'Unknown error'}`, 'error');
                 }
             } catch (error) {
                 updateStatus(`Network error: ${error.message}`, 'error');
-                console.error('Network error:', error);
+                console.error('API call error:', error);
             }
         }
 
         // Auto-trigger API call when page loads
         document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(() => {
-                makeApiCall();
-            }, 500);
+            makeApiCall();
         });
-
-        // Re-trigger if URL params change
-        let lastUrl = window.location.href;
-        setInterval(() => {
-            if (window.location.href !== lastUrl) {
-                lastUrl = window.location.href;
-                makeApiCall();
-            }
-        }, 1000);
     </script>
 </body>
 </html>
