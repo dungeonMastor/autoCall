@@ -1,88 +1,135 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pushbullet API Caller</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 50px;
-            background-color: #F5F5F5;
-        }
-        .status {
-            padding: 20px;
-            border-radius: 5px;
-            margin: 10px 0;
-            font-weight: bold;
-        }
-        .loading { background-color: #FFF3CD; color: #856404; }
-        .success { background-color: #D1ECF1; color: #0C5460; }
-        .error { background-color: #F8D7DA; color: #721C24; }
-    </style>
-</head>
-<body>
-    <div id="status">Initializing...</div>
-    <script>
-        function updateStatus(message, type = '') {
-            const statusDiv = document.getElementById('status');
-            statusDiv.textContent = message;
-            statusDiv.className = `status ${type}`;
-        }
-
-        function parseUrlParams() {
-            const searchParams = new URLSearchParams(window.location.search);
-            const params = {};
-            for (const [key, value] of searchParams.entries()) {
-                params[key] = value;
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Pushbullet API Caller</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 50px;
+                background-color: #f5f5f5;
             }
-            return params;
-        }
-
-        async function makeApiCall() {
-            const urlParams = parseUrlParams();
-            // Set defaults only if not provided
-            if (!urlParams.type) urlParams.type = 'note';
-            if (!urlParams.title) urlParams.title = 'Test Push';
-            if (!urlParams.body) urlParams.body = 'This is a test push from the API caller';
-
-            // access_token must be provided in the URL
-            if (!urlParams.access_token) {
-                updateStatus('Missing access_token in URL parameters.', 'error');
-                return;
+            .status {
+                padding: 20px;
+                border-radius: 5px;
+                margin: 10px 0;
+                font-weight: bold;
             }
-            const token = urlParams.access_token;
-            // Remove access_token from payload
-            delete urlParams.access_token;
+            .loading {
+                background-color: #fff3cd;
+                color: #856404;
+            }
+            .success {
+                background-color: #d1ecf1;
+                color: #0c5460;
+            }
+            .error {
+                background-color: #f8d7da;
+                color: #721c24;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="status">Initializing...</div>
+        <script>
+            function updateStatus(message, type = "") {
+                const statusDiv = document.getElementById("status");
+                statusDiv.textContent = message;
+                statusDiv.className = `status ${type}`;
+            }
 
-            updateStatus('Sending push via Netlify function...', 'loading');
-            try {
-                const response = await fetch('/.netlify/functions/push', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({ access_token: token, ...urlParams })
-                });
-
-                const responseData = await response.json();
-                if (response.ok) {
-                    updateStatus(`Push sent successfully! Push ID: ${responseData.iden}`, 'success');
-                    console.log('Response:', responseData);
-                } else {
-                    updateStatus(`Push failed! Status: ${response.status}, Error: ${responseData.error?.message || 'Unknown error'}`, 'error');
+            function parseUrlParams() {
+                const searchParams = new URLSearchParams(
+                    window.location.search
+                );
+                const params = {};
+                for (const [key, value] of searchParams.entries()) {
+                    params[key] = value;
                 }
-            } catch (error) {
-                updateStatus(`Network error: ${error.message}`, 'error');
-                console.error('API call error:', error);
+                return params;
             }
-        }
 
-        // Auto-trigger API call when page loads
-        document.addEventListener('DOMContentLoaded', function() {
-            makeApiCall();
-        });
-    </script>
-</body>
+            async function makeApiCall() {
+                const urlParams = parseUrlParams();
+                // Set defaults only if not provided
+                if (!urlParams.type) urlParams.type = "note";
+                if (!urlParams.title) urlParams.title = "Test Push";
+                if (!urlParams.body)
+                    urlParams.body = "This is a test push from the API caller";
+
+                // access_token must be provided in the URL
+                if (!urlParams.access_token) {
+                    updateStatus(
+                        "Missing access_token in URL parameters.",
+                        "error"
+                    );
+                    return;
+                }
+                const token = urlParams.access_token;
+                // Remove access_token from payload
+                delete urlParams.access_token;
+
+                updateStatus("Sending push via Netlify function...", "loading");
+                try {
+                    const response = await fetch("/.netlify/functions/push", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Accept: "application/json",
+                        },
+                        body: JSON.stringify({
+                            access_token: token,
+                            ...urlParams,
+                        }),
+                    });
+
+                    // Check if response is ok first
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        updateStatus(
+                            `HTTP Error: ${response.status} - ${errorText}`,
+                            "error"
+                        );
+                        return;
+                    }
+
+                    // Try to parse JSON response
+                    let responseData;
+                    try {
+                        responseData = await response.json();
+                    } catch (parseError) {
+                        const textResponse = await response.text();
+                        updateStatus(
+                            `Failed to parse JSON response. Raw response: ${textResponse}`,
+                            "error"
+                        );
+                        console.error("Parse error:", parseError);
+                        return;
+                    }
+
+                    if (responseData.error) {
+                        updateStatus(
+                            `Push failed: ${responseData.error}`,
+                            "error"
+                        );
+                    } else {
+                        updateStatus(
+                            `Push sent successfully! Push ID: ${responseData.iden}`,
+                            "success"
+                        );
+                    }
+                    console.log("Response:", responseData);
+                } catch (error) {
+                    updateStatus(`Network error: ${error.message}`, "error");
+                    console.error("API call error:", error);
+                }
+            }
+
+            // Auto-trigger API call when page loads
+            document.addEventListener("DOMContentLoaded", function () {
+                makeApiCall();
+            });
+        </script>
+    </body>
 </html>
