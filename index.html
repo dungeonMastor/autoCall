@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pushbullet API Caller</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 50px;
+            background-color: #F5F5F5;
+        }
+        .status {
+            padding: 20px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .loading { background-color: #FFF3CD; color: #856404; }
+        .success { background-color: #D1ECF1; color: #0C5460; }
+        .error { background-color: #F8D7DA; color: #721C24; }
+    </style>
+</head>
+<body>
+    <div id="status">Initializing...</div>
+    <script>
+        // Configuration
+        const API_ENDPOINT = 'https://api.pushbullet.com/v2/pushes';
+        const ACCESS_TOKEN = 'o.dtwWifi8szgf0SKCRBY9MnuawktIhHBl';
+        const HTTP_METHOD = 'POST';
+
+        function updateStatus(message, type = '') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function parseUrlParams() {
+            const searchParams = new URLSearchParams(window.location.search);
+            const params = {};
+            for (const [key, value] of searchParams.entries()) {
+                params[key] = value;
+            }
+            return params;
+        }
+
+        async function makeApiCall() {
+            const urlParams = parseUrlParams();
+            // Set defaults only if not provided
+            if (!urlParams.type) urlParams.type = 'note';
+            if (!urlParams.title) urlParams.title = 'Test Push';
+            if (!urlParams.body) urlParams.body = 'This is a test push from the API caller';
+
+            // Use access_token from URL if provided, else fallback to default
+            const token = urlParams.access_token || ACCESS_TOKEN;
+            // Remove access_token from payload if present
+            if (urlParams.access_token) delete urlParams.access_token;
+
+            updateStatus('Sending push to Pushbullet...', 'loading');
+            try {
+                const response = await fetch(API_ENDPOINT, {
+                    method: HTTP_METHOD,
+                    headers: {
+                        'Access-Token': token,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(urlParams)
+                });
+
+                if (response.ok) {
+                    const responseData = await response.json();
+                    updateStatus(`Push sent successfully! Push ID: ${responseData.iden}`, 'success');
+                    console.log('Response:', responseData);
+                } else {
+                    const errorData = await response.json();
+                    updateStatus(`Push failed! Status: ${response.status}, Error: ${errorData.error?.message || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                updateStatus(`Network error: ${error.message}`, 'error');
+                console.error('API call error:', error);
+            }
+        }
+
+        // Auto-trigger API call when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            makeApiCall();
+        });
+    </script>
+</body>
+</html>
